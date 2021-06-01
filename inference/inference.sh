@@ -11,5 +11,7 @@
 cd ..
 for FILE in inference/input_dir/* ;
     do f="$(echo $FILE | cut -d'/' -f3)";
-    python3 run.py -d custom -k myvideos -arc 3,3,3,3,3 -c checkpoint --evaluate pretrained_h36m_detectron_coco.bin --render --viz-subject $f --viz-action custom --viz-camera 0 --viz-video $FILE --viz-output inference/output_dir/$f --viz-size 6;
+    fname="$(echo $f | cut -d'.' -f1)";
+    echo $fname;
+    python3 run.py -d custom -k myvideos -arc 3,3,3,3,3 -c checkpoint --evaluate pretrained_h36m_detectron_coco.bin --render --viz-subject $f --viz-action custom --viz-camera 0 --viz-video $FILE --viz-export inference/output_dir/$fname.npy --viz-size 6;
 done
