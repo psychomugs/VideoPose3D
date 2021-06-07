@@ -114,8 +114,8 @@ def main(args):
         segments = []
         keypoints = []
 
-        # for frame_i, im in enumerate(read_video(video_name)):
-        for frame_i, im in enumerate(stream_video()):
+        for frame_i, im in enumerate(read_video(video_name)):
+        # for frame_i, im in enumerate(stream_video()):
             t = time.time()
             outputs = predictor(im)['instances'].to('cpu')
             
@@ -146,7 +146,7 @@ def main(args):
             boxes.append(cls_boxes)
             segments.append(None)
             keypoints.append(cls_keyps)
-            print(kps)
+            # print(kps)
 
         
         # Video resolution
