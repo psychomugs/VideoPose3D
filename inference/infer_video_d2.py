@@ -15,6 +15,7 @@ from detectron2.config import get_cfg
 from detectron2 import model_zoo
 from detectron2.engine import DefaultPredictor
 
+import cv2
 import subprocess as sp
 import numpy as np
 import time
@@ -80,6 +81,15 @@ def read_video(filename):
         yield np.frombuffer(data, dtype='uint8').reshape((h, w, 3))
 
 
+cam = cv2.VideoCapture(0)
+def stream_video():
+    while True:
+        ret,img = cam.read()
+        if not ret:
+            continue
+        yield img
+
+
 def main(args):
 
     cfg = get_cfg()
@@ -104,7 +114,8 @@ def main(args):
         segments = []
         keypoints = []
 
-        for frame_i, im in enumerate(read_video(video_name)):
+        # for frame_i, im in enumerate(read_video(video_name)):
+        for frame_i, im in enumerate(stream_video()):
             t = time.time()
             outputs = predictor(im)['instances'].to('cpu')
             
@@ -135,6 +146,7 @@ def main(args):
             boxes.append(cls_boxes)
             segments.append(None)
             keypoints.append(cls_keyps)
+            print(kps)
 
         
         # Video resolution
