@@ -20,6 +20,8 @@ import matplotlib.pyplot as plt
 import PIL
 default_height = 80
 last_height = default_height
+embodiments = ['NoArms','OneArm','TwoArms']
+
 
 import argparse
 def parse_args(args):
@@ -130,7 +132,20 @@ def live_input(ctrl_addr):
         send_data(ctrl_addr, rot_dict, arm_pos)
 
 
-def np_input(ctrl_addr, input_file, draw=True, height_control=False):
+def np_input(ctrl_addr, input_file, draw=True, height_control=False, arm_mode=2):
+
+
+    #vp_2021-08-03T23-40_31-352Z_i772O_NoArms_Happy1
+    # parse the file name 
+    if 'vp' in input_file[:2]:
+        [user_id,embodiment,scenario] = input_file.split('_')[2:5]
+        save_fn = f'vp:{scenario.lower()}_{user_id}_{embodiment}'
+        arm_mode = embodiments.index(embodiment)
+    else:
+        save_fn = input_file
+    print(f"Using {arm_mode} arms")
+
+
     np_file = './inference/output_dir/{}.npy'.format(input_file)
     frames = load_numpy(np_file)
     frames *= -1
@@ -222,6 +237,11 @@ def np_input(ctrl_addr, input_file, draw=True, height_control=False):
         r_angle = _amplify(_get_angle(r_upper_arm,r_lower_arm,r_arm))
         # print(r_angle,l_angle)
 
+        if arm_mode<2:
+            l_angle = 0
+        if arm_mode<1:
+            r_angle = 0
+
         return {'left':l_angle, 'right':r_angle}, [l_lower_arm, r_lower_arm]
 
     def _get_height(frame):
@@ -298,15 +318,9 @@ def np_input(ctrl_addr, input_file, draw=True, height_control=False):
             if not ret: break
 
 
-    #vp_2021-08-03T23-40_31-352Z_i772O_NoArms_Happy1
-    # parse the file name 
-    def _parse_filename(filename):
-        [user_id,embodiment,scenario] = filename.split('_')[2:5]
-        # use colons which will turn into directories
-        return f'vp:{scenario.lower()}_{user_id}_{embodiment}'
-    if 'vp' in input_file[:2]: input_file = _parse_filename(input_file)
+        
 
-    requests.post(ctrl_addr+'record/stop/{}'.format(input_file))
+    requests.post(ctrl_addr+'record/stop/{}'.format(save_fn))
 
     vid.release()
     vid_writer.release()
