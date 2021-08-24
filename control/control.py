@@ -2,6 +2,10 @@ import requests
 import time
 import sys
 import os
+import glob
+
+sys.path.append('../blossom/')
+from src import server, sequence
 
 import socketio
 sio = socketio.Client()
@@ -10,9 +14,10 @@ import numpy as np
 from utils import Keypoints3D as K
 from utils import Axis3D as A
 
-framerate = 30.
-framerate = 15.
+# framerate = 30.
+# framerate = 15.
 target_framerate = 10.
+# target_framerate = 30.
 import cv2
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 import matplotlib; matplotlib.use('agg')
@@ -20,7 +25,7 @@ import matplotlib.pyplot as plt
 import PIL
 default_height = 80
 last_height = default_height
-embodiments = ['NoArms','OneArm','TwoArms']
+# embodiments = ['NoArms','OneArm','TwoArms']
 
 
 import argparse
@@ -29,7 +34,11 @@ def parse_args(args):
     parser.add_argument('--video','-v',default='',
         help='The name of the video the robot will mimic. Accepts either video.mp4, dir/video.mp4, etc')
     parser.add_argument('--height', '-height', default=False,
-                        help='Whether to implement height control or not.', action='store_true')
+        help='Whether to implement height control or not.',
+        action='store_true')
+    parser.add_argument('--robot','-robot', default=True,
+        help='Whether to control the robot or not.',
+        action='store_true')
     return parser.parse_args(args)
 
 
@@ -77,6 +86,10 @@ def send_data(ctrl_addr, rot_dict, arm_pos, height):
         'portrait': False,
       };
     requests.post(ctrl_addr+'position', json=data_packet)
+    motor_pos = server.imu_to_motor_pos(data_packet, sensitivity=3.0)
+    motor_pos.update({k:(v/50. + 3) for k,v in motor_pos.items()})
+    print(motor_pos)
+    return motor_pos
 
 
 def get_rot(x,y,z,rot_order='ZXY'):
@@ -132,15 +145,16 @@ def live_input(ctrl_addr):
         send_data(ctrl_addr, rot_dict, arm_pos)
 
 
-def np_input(ctrl_addr, input_file, draw=True, height_control=False, arm_mode=2):
+def np_input(ctrl_addr, input_file, draw=True, height_control=False, arm_mode=2, robot_control=True, record=False):
 
 
     #vp_2021-08-03T23-40_31-352Z_i772O_NoArms_Happy1
     # parse the file name 
     if 'vp' in input_file[:2]:
-        [user_id,embodiment,scenario] = input_file.split('_')[2:5]
-        save_fn = f'vp:{scenario.lower()}_{user_id}_{embodiment}'
-        arm_mode = embodiments.index(embodiment)
+        # [user_id,embodiment,scenario] = input_file.split('_')[2:5]
+        [scenario,embodiment,user_id] = input_file.split('_')[2:5]
+        save_fn = f'vp/{scenario.lower()}_{embodiment}_{user_id}'
+        arm_mode = int(embodiment[-1])
     else:
         save_fn = input_file
     print(f"Using {arm_mode} arms")
@@ -159,8 +173,10 @@ def np_input(ctrl_addr, input_file, draw=True, height_control=False, arm_mode=2)
         int(vid.get(cv2.CAP_PROP_FRAME_WIDTH)),
         int(vid.get(cv2.CAP_PROP_FRAME_HEIGHT)))
     framerate = vid.get(cv2.CAP_PROP_FPS)
-    print(framerate)
     frame_skip = int(framerate/target_framerate)
+    # manually setting frame_skip to 4 @30fps but target @10fps works best
+    # frame_skip = 4
+    print(f"Actual / Target framerates: {framerate} / {target_framerate}, skipping {frame_skip} frame(s)")
     vid_writer = cv2.VideoWriter(
         './control/control_vids/{}.mp4'.format(input_file),
         fourcc,
@@ -175,11 +191,13 @@ def np_input(ctrl_addr, input_file, draw=True, height_control=False, arm_mode=2)
 
     l_shoulder_0,r_shoulder_0 = frames[0][K.L_SHOULDER.value], frames[0][K.R_SHOULDER.value]
     root = np.average([l_shoulder_0,r_shoulder_0],axis=0)
-    print(root)
+    print(f"Root position: {root}")
     root[2] = 0
     # root = 
     # print(shoulder_0)
     def _get_rot(frame):
+        # Get the rotation matrix for the upper body
+
         # root = frame[K.SPINE.value]
         # root = frame[K.R_HIP.value]+frame[K.L_HIP.value]
 
@@ -206,6 +224,20 @@ def np_input(ctrl_addr, input_file, draw=True, height_control=False, arm_mode=2)
         # print(z,y)
         x = np.cross(y,z)
         x /= np.linalg.norm(x)
+
+
+
+        # EXPERIMENTAL - use head instead of shoulders
+        if True:
+            # z = frame[K.HEAD.value]-frame[K.SPINE.value]
+            z = frame[K.HEAD.value]-frame[K.THORAX.value]
+            # z = frame[K.NOSE.value]-frame[K.HEAD.value]
+            z /= np.linalg.norm(z)
+            x = frame[K.R_SHOULDER.value]-frame[K.L_SHOULDER.value]
+            x /= np.linalg.norm(x)
+            y = np.cross(z,x)
+
+
         # print(x,y,z)        else:
         return get_rot_dict(x,y,z,rot_order='ZXY'), [l_shoulder, r_shoulder, x, y, z]
 
@@ -213,8 +245,16 @@ def np_input(ctrl_addr, input_file, draw=True, height_control=False, arm_mode=2)
     _get_vec = lambda x0,x1 : frame[x1.value]-frame[x0.value]
     _get_angle = lambda a,b,c : np.arccos(
         (norm(a)**2 + norm(b)**2 - norm(c)**2) / (2*norm(a)*norm(b)))*180/np.pi
-    def _get_arm_pos(frame):
-        angle_multiplier=1.5
+
+    arm_rest = 10
+    [l_arm_rest, r_arm_rest] = list(np.random.uniform(low=-arm_rest,high=arm_rest,size=2))
+    [l_arm_amp, r_arm_amp] = list(np.random.uniform(low=-arm_rest,high=arm_rest,size=2))
+    [l_arm_start,r_arm_start] = list(np.random.uniform(low=-arm_rest*10,high=arm_rest*10,size=2))
+
+    print(l_arm_rest, l_arm_amp, l_arm_start)
+    arm_offset = 100
+    def _get_arm_pos(frame, f, angle_multiplier=1.5):
+        # Get the arm positions
 
         a,b,c = '{}_SHOULDER','{}_ELBOW','WRIST'
         # l_upper_arm = _get_vec(K.L_SHOULDER, K.L_ELBOW)
@@ -231,16 +271,22 @@ def np_input(ctrl_addr, input_file, draw=True, height_control=False, arm_mode=2)
 
         l_arm = l_upper_arm+l_lower_arm
         r_arm = r_upper_arm+r_lower_arm
-        angle_mul, angle_pow = 1.,1
+        angle_mul, angle_pow = 1.5,1
         _amplify = lambda angle : angle_mul*150*((angle/150)**angle_pow)    
         l_angle = -_amplify(_get_angle(l_upper_arm,l_lower_arm,l_arm))
         r_angle = _amplify(_get_angle(r_upper_arm,r_lower_arm,r_arm))
         # print(r_angle,l_angle)
 
+        # if less than both arms, drop left arm
         if arm_mode<2:
-            l_angle = 0
+            l_angle = l_arm_rest + l_arm_amp*np.sin((f+l_arm_start)*np.pi/180)
+        # if no arms, also drop right arm
         if arm_mode<1:
-            r_angle = 0
+            r_angle = r_arm_rest + r_arm_amp*np.sin((f+r_arm_start)*np.pi/180)
+
+        # account for offsets
+        l_angle += 100
+        r_angle -= 100
 
         return {'left':l_angle, 'right':r_angle}, [l_lower_arm, r_lower_arm]
 
@@ -256,7 +302,7 @@ def np_input(ctrl_addr, input_file, draw=True, height_control=False, arm_mode=2)
         l_height_ratio = norm(l_lower_leg+l_upper_leg)/(norm(l_lower_leg)+norm(l_upper_leg))
         r_height_ratio = norm(r_lower_leg+r_upper_leg)/(norm(r_lower_leg)+norm(r_upper_leg))
         height = np.average([l_height_ratio,r_height_ratio])
-        # check if legs are messed up - if so set to original height
+        # check if legs are messed up - if so set to default height
         _leg_violation = lambda leg : leg[0]>leg[1] or leg[0]>leg[2] or leg[1]>leg[2] or height<0.5
         if _leg_violation(l_z) or _leg_violation(r_z):
             height = last_height
@@ -270,16 +316,27 @@ def np_input(ctrl_addr, input_file, draw=True, height_control=False, arm_mode=2)
         return height
 
     # start recording
-    requests.post(ctrl_addr+'record/start')
+    if record: requests.post(ctrl_addr+'record/start')
 
     # for frame in frames:
     ret,img = vid.read()
-    for f in range(0,len(frames),frame_skip):
+    # frame_skip *=2
+    # frame_skip = int(frame_skip*1.4)
+    start_frame = 0
+    end_frame = len(frames)
+    end_frame -= int(framerate)
+
+    # for f in range(0,len(frames),frame_skip):
+
+    # cut out last second to account for me going to click the mouse
+    # for f in range(0,len(frames)-1*framerate,frame_skip):
+    motor_pos_list = []
+    for f in range(start_frame, end_frame, frame_skip):
         t = time.time()
 
         frame = frames[f]
         # rot_dict = {c:0 for c in 'xyz'}
-        arm_pos, arm_vectors = _get_arm_pos(frame)
+        arm_pos, arm_vectors = _get_arm_pos(frame, f)
         rot_dict, vectors = _get_rot(frame)
         height = _get_height(frame) if height_control else default_height
 
@@ -305,22 +362,28 @@ def np_input(ctrl_addr, input_file, draw=True, height_control=False, arm_mode=2)
             cv2.imshow('Frame',concat_img)
             if cv2.waitKey(25) & 0xFF==ord('q'):
                 break
-        send_data(ctrl_addr, rot_dict, arm_pos, height)
+        motor_pos_list.append(send_data(ctrl_addr, rot_dict, arm_pos, height))
 
         # time.sleep(1./target_framerate)
         
-        while (time.time()-t<(1./target_framerate)):
-            pass
+        # while (time.time()-t<(1./target_framerate)):
+        #     pass
 
         # input('Press Enter to step to next frame ')
         for _ in range(frame_skip):
             ret,img = vid.read()
             if not ret: break
 
+    frame_frequency = int(1000/target_framerate)
 
-        
+    millis = range(0,len(motor_pos_list)*frame_frequency, frame_frequency)
+    # print(save_fn)
+    print(sequence.Sequence.from_dict(
+        millis, motor_pos_list, save_fn
+        ).to_file(robot_dir='../blossom/src/sequences/woody/'))
 
-    requests.post(ctrl_addr+'record/stop/{}'.format(save_fn))
+    if record: requests.post(ctrl_addr+'record/stop/{}'.format(save_fn))
+    requests.get(f"{ctrl_addr}/r")
 
     vid.release()
     vid_writer.release()
@@ -337,14 +400,10 @@ if __name__=="__main__":
     input_vid = args.video.split('/')[-1].split('.')[0]
     if len(input_vid)==0: 
         print(f'Invalid video {input_vid} specified.')
+    elif input_vid=='newest':
+        input_vid = sorted(glob.glob('inference/output_dir/vp*.npy'))[-1]
+        input_vid = input_vid.split('/')[-1].replace('.npy','')
     else:
         print(f'Running video {input_vid}.')
-    np_input(ctrl_addr, input_vid, height_control=args.height)
+    np_input(ctrl_addr, input_vid, height_control=args.height, robot_control=args.robot)
     print("took {} seconds".format(time.time()-start_time))
-
-
-
-
-
-
-
