@@ -44,7 +44,7 @@ if __name__=="__main__":
                 with open(webm_file,'a') as f: f.write(f"\n{seq_name}")
             elif cmd=='p':
                 pull()
-                os.system('python3 control/control.py --video newest')
+                os.system('python3 control/control.py --video newest --show_video')
             else:
                 transfer(cmd)
 

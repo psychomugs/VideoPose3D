@@ -39,6 +39,9 @@ def parse_args(args):
     parser.add_argument('--robot','-robot', default=True,
         help='Whether to control the robot or not.',
         action='store_true')
+    parser.add_argument('--show_video','-s',default=False,
+        help='Whether to show the video in real-time or not',
+        action='store_true')
     return parser.parse_args(args)
 
 
@@ -145,7 +148,7 @@ def live_input(ctrl_addr):
         send_data(ctrl_addr, rot_dict, arm_pos)
 
 
-def np_input(ctrl_addr, input_file, draw=True, height_control=False, arm_mode=2, robot_control=True, record=False):
+def np_input(ctrl_addr, input_file, draw=True, height_control=False, arm_mode=2, robot_control=True, record=False, show_video=True):
 
 
     #vp_2021-08-03T23-40_31-352Z_i772O_NoArms_Happy1
@@ -359,7 +362,7 @@ def np_input(ctrl_addr, input_file, draw=True, height_control=False, arm_mode=2,
             concat_img = cv2.vconcat([img,fig_np])
             vid_writer.write(concat_img)
 
-            cv2.imshow('Frame',concat_img)
+            if show_video: cv2.imshow('Frame',concat_img)
             if cv2.waitKey(25) & 0xFF==ord('q'):
                 break
         motor_pos_list.append(send_data(ctrl_addr, rot_dict, arm_pos, height))
@@ -382,8 +385,9 @@ def np_input(ctrl_addr, input_file, draw=True, height_control=False, arm_mode=2,
         millis, motor_pos_list, save_fn
         ).to_file(robot_dir='../blossom/src/sequences/woody/'))
 
+    print(f"{ctrl_addr}/r/{save_fn.replace('vp/','vp:')}")
     if record: requests.post(ctrl_addr+'record/stop/{}'.format(save_fn))
-    requests.get(f"{ctrl_addr}/r")
+    requests.get(f"{ctrl_addr}/r/{save_fn.replace('vp/','vp:')}")
 
     vid.release()
     vid_writer.release()
@@ -405,5 +409,5 @@ if __name__=="__main__":
         input_vid = input_vid.split('/')[-1].replace('.npy','')
     else:
         print(f'Running video {input_vid}.')
-    np_input(ctrl_addr, input_vid, height_control=args.height, robot_control=args.robot)
+    np_input(ctrl_addr, input_vid, height_control=args.height, robot_control=args.robot, show_video=args.show_video)
     print("took {} seconds".format(time.time()-start_time))
