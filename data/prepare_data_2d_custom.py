@@ -61,15 +61,11 @@ def decode(filename):
     }], metadata
 
 
-if __name__ == '__main__':
+
+def main(args):
     if os.path.basename(os.getcwd()) != 'data':
         print('This script must be launched from the "data" directory')
         exit(0)
-        
-    parser = argparse.ArgumentParser(description='Custom dataset creator')
-    parser.add_argument('-i', '--input', type=str, default='', metavar='PATH', help='detections directory')
-    parser.add_argument('-o', '--output', type=str, default='', metavar='PATH', help='output suffix for 2D detections')
-    args = parser.parse_args()
     
     if not args.input:
         print('Please specify the input directory')
@@ -96,3 +92,13 @@ if __name__ == '__main__':
     print('Saving...')
     np.savez_compressed(output_prefix_2d + args.output, positions_2d=output, metadata=metadata)
     print('Done.')
+
+def parse_args():
+        
+    parser = argparse.ArgumentParser(description='Custom dataset creator')
+    parser.add_argument('-i', '--input', type=str, default='', metavar='PATH', help='detections directory')
+    parser.add_argument('-o', '--output', type=str, default='', metavar='PATH', help='output suffix for 2D detections')
+    return parser.parse_args()
+
+if __name__ == '__main__':
+    main(parse_args())

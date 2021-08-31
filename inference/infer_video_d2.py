@@ -15,7 +15,7 @@ from detectron2.config import get_cfg
 from detectron2 import model_zoo
 from detectron2.engine import DefaultPredictor
 
-import cv2
+# import cv2
 import subprocess as sp
 import numpy as np
 import time
@@ -81,13 +81,13 @@ def read_video(filename):
         yield np.frombuffer(data, dtype='uint8').reshape((h, w, 3))
 
 
-cam = cv2.VideoCapture(0)
-def stream_video():
-    while True:
-        ret,img = cam.read()
-        if not ret:
-            continue
-        yield img
+# cam = cv2.VideoCapture(0)
+# def stream_video():
+#     while True:
+#         ret,img = cam.read()
+#         if not ret:
+#             continue
+#         yield img
 
 
 def main(args):
@@ -161,4 +161,5 @@ def main(args):
 if __name__ == '__main__':
     setup_logger()
     args = parse_args()
+    print(args)
     main(args)
