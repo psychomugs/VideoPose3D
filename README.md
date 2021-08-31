@@ -1,6 +1,6 @@
 # Installation
 - [Install Detectron2](https://detectron2.readthedocs.io/en/latest/tutorials/install.html)
-- 
+- Install the requirements: `pip3 install -r requirements.txt`
 
 # Usage
 ## Start robot
