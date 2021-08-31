@@ -23,8 +23,8 @@ if __name__=="__main__":
         elif plot_ax==2:
             ax[i].plot(data[...,i])
     plt.savefig('./inference/output_dir/{}.png'.format(sys.argv[1]))
-    plt.show(block=False)
-    input('Press Enter to quit and exit')
+    # plt.show(block=False)
+    # input('Press Enter to quit and exit')
     # import pdb; pdb.set_trace();
 
 # arms = 13, 16
